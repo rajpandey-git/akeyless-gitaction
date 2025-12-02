@@ -1,0 +1,48 @@
+name: Fetch Akeyless Static Secret
+
+on:
+  # Allows you to run this workflow manually from the Actions tab
+  workflow_dispatch:
+
+jobs:
+  fetch_and_use_secret:
+    runs-on: ubuntu-latest
+    
+    # REQUIRED for JWT/OIDC authentication with Akeyless
+    permissions:
+      id-token: write # Grants permission to fetch the OIDC token
+      contents: read  # Allows the action to read repository contents
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Fetch 'secrets/MysecondSecret' from Akeyless
+        # Using the official community action
+        uses: akeyless-community/akeyless-github-action@v1.1.2 
+        id: fetch-secrets
+        with:
+          # Your Access ID (e.g., Auth Method ID). 
+          # It's recommended to store this as a GitHub Repository Variable.
+          access-id: ${{ vars.AKEYLESS_ACCESS_ID }} 
+          
+          # Recommended Auth Type: JWT (uses GitHub's OIDC token)
+          access-type: jwt 
+          
+          # Specify the list of static secrets to fetch
+          static-secrets: |
+            # The path to your secret in Akeyless
+            - name: "secrets/MysecondSecret"
+              # The name of the output variable that will hold the secret value
+              output-name: "MY_SECOND_SECRET" 
+      
+      - name: Use the Fetched Secret
+        # Access the secret value via the step output
+        run: |
+          echo "Secret successfully fetched and is available for use."
+          echo "The secret value is: ${{ steps.fetch-secrets.outputs.MY_SECOND_SECRET }}"
+          # You can also export it to an environment variable for subsequent steps:
+          # echo "MY_SECRET_ENV_VAR=${{ steps.fetch-secrets.outputs.MY_SECOND_SECRET }}" >> $GITHUB_ENV
+          
+          # **CRITICAL**: Never output secrets directly in production logs. 
+          # This example is for demonstration purposes only.
