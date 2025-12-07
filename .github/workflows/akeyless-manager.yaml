@@ -1,48 +1,67 @@
-name: Fetch Akeyless Static Secret
+name: Fetch Akeyless Static Secret (JWT/OIDC)
 
+# Controls when the workflow is triggered: on a manual run
 on:
-  # Allows you to run this workflow manually from the Actions tab
   workflow_dispatch:
+    inputs:
+      reason:
+        description: 'Optional: Reason for running the workflow'
+        required: false
+        default: 'Manual trigger for Akeyless test'
 
 jobs:
   fetch_and_use_secret:
     runs-on: ubuntu-latest
     
-    # REQUIRED for JWT/OIDC authentication with Akeyless
+    # 🚨 REQUIRED for JWT/OIDC authentication 
+    # This grants permission to GitHub to issue the OIDC token
     permissions:
-      id-token: write # Grants permission to fetch the OIDC token
-      contents: read  # Allows the action to read repository contents
+      id-token: write  # Crucial for Akeyless to verify the workflow's identity
+      contents: read   # Allows the checkout step to work
 
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
       - name: Fetch 'secrets/MysecondSecret' from Akeyless
-        # Using the official community action
         uses: akeyless-community/akeyless-github-action@v1.1.2 
         id: fetch-secrets
         with:
-          # Your Access ID (e.g., Auth Method ID). 
-          # It's recommended to store this as a GitHub Repository Variable.
+          # The public identifier for your Akeyless Auth Method (Stored as a GitHub Variable)
           access-id: ${{ vars.AKEYLESS_ACCESS_ID }} 
           
-          # Recommended Auth Type: JWT (uses GitHub's OIDC token)
+          # Recommended Auth Type: JWT (uses the GitHub OIDC token)
           access-type: jwt 
           
+          # Explicitly set the Akeyless API URL for clarity
+          api-url: https://api.akeyless.io
+          
+          # IMPORTANT FIX: This breaks the structured secret (JSON/YAML) into 
+          # individual environment variables (e.g., MY_SECOND_SECRET_USERNAME)
+          parse-json-secrets: true
+
           # Specify the list of static secrets to fetch
           static-secrets: |
-            # The path to your secret in Akeyless
+            # Path to the secret in Akeyless
             - name: "secrets/MysecondSecret"
-              # The name of the output variable that will hold the secret value
+              # Prefix for environment variables: MY_SECOND_SECRET_
               output-name: "MY_SECOND_SECRET" 
       
-      - name: Use the Fetched Secret
-        # Access the secret value via the step output
+      # --- USAGE STEP ---
+      # This step consumes the individual secret values fetched by the previous action.
+      - name: Process and Use the Secret Values
         run: |
-          echo "Secret successfully fetched and is available for use."
-          echo "The secret value is: ${{ steps.fetch-secrets.outputs.MY_SECOND_SECRET }}"
-          # You can also export it to an environment variable for subsequent steps:
-          # echo "MY_SECRET_ENV_VAR=${{ steps.fetch-secrets.outputs.MY_SECOND_SECRET }}" >> $GITHUB_ENV
+          echo "--- Processing Secrets ---"
           
-          # **CRITICAL**: Never output secrets directly in production logs. 
-          # This example is for demonstration purposes only.
+          # Access the individual keys using the format: ${{ env.OUTPUT_NAME_KEY }}
+          USERNAME="${{ env.MY_SECOND_SECRET_USERNAME }}"
+          PASSWORD="${{ env.MY_SECOND_SECRET_PASSWORD }}"
+          
+          # Example: Log the username for debugging (password is masked by default)
+          echo "Username successfully retrieved: $USERNAME"
+          
+          # Example: Use the secrets to log into a service (e.g., Docker registry)
+          # DO NOT echo passwords. Use them directly in a command like this:
+          # docker login my.registry.com -u "$USERNAME" -p "$PASSWORD"
+          
+          echo "Secrets are ready for use in subsequent commands."
